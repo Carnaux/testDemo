@@ -169,6 +169,7 @@
 	let el = "<div style='width:100px; height:100px; background-color: red;'><button>sasas</button></div>"
 
     ui.createUIElement(el, "html-string").then( uiel => {
+		uiel.rotation.x = -Math.PI/2;
         ui.add(uiel);
 	});
 	
