@@ -21,9 +21,17 @@
 		Contact me any time at <a href='https://twitter.com/nicolocarp' target='_blank'>@nicolocarp</a>
 	</div>
 
-	<div id="css"></div>
+	<div id="css">
+		<!-- <div id="testHTML" style="width: 100px; height: 100px; background-color: red;"></div> -->
+	</div>
     <div id="webgl"></div>
 <script type="module">
+
+	var cameraParams = {
+		pos: new THREE.Vector3(),
+		quat: new THREE.Quaternion(),
+		sca: new THREE.Vector3()
+	}
 	//////////////////////////////////////////////////////////////////////////////////
 	//		Init
 	//////////////////////////////////////////////////////////////////////////////////
@@ -163,13 +171,11 @@
 	var material	= new THREE.MeshNormalMaterial();
 	var mesh	= new THREE.Mesh( geometry, material );
 	mesh.position.y	= 0.5
-	// scene.add( mesh );
-	console.log("scene", scene)
-	// console.log(ui.css3DRenderer)
+
 	let el = "<div style='width:100px; height:100px; background-color: red;'><button>sasas</button></div>"
 
     ui.createUIElement(el, "html-string").then( uiel => {
-		uiel.rotation.x = -Math.PI/2;
+		uiel.position.y -= 3;
         ui.add(uiel);
 	});
 	
@@ -190,18 +196,8 @@
 
 	// render the scene
 	onRenderFcts.push(function(){
-	
-
-		
-
-		// console.log(pos);
-
-		// if(pos.x != NaN){
-		// 	document.getElementById()
-		// }
-
 		renderer.render( scene, camera );
-		ui.updateXR();
+		ui.updateAR();
 	})
 
 	// run the rendering loop

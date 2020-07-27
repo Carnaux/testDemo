@@ -3,12 +3,16 @@
  * @author mrdoob / http://mrdoob.com/
  * @author yomotsu / https://yomotsu.net/
  */
+/**
+ * Modified by @author Carnaux / 
+ */
 
 import {
 	Matrix4,
 	Object3D,
-	Vector3
-} from "./three/build/three.module.js";
+	Vector3,
+	Camera
+} from "../node_modules/three/build/three.module.js";
 
 var CSS3DObject = function ( element ) {
 
@@ -145,17 +149,6 @@ var CSS3DRenderer = function () {
 
 	}
 
-	function getCameraTranslation(matrix) {
-
-		var elements = matrix.elements;
-
-		return  {
-			x: elements[ 3 ],
-			y: elements[ 7 ],
-			z: elements[ 11 ]
-		}
-	}
-
 	function getObjectCSSMatrix( matrix, cameraCSSMatrix) {
 
 		var elements = matrix.elements;
@@ -217,8 +210,8 @@ var CSS3DRenderer = function () {
 
 			} else {
 
-				style = getObjectCSSMatrix( object.matrixWorld, cameraCSSMatrix);
-
+				style = getObjectCSSMatrix( object.matrixWorld, cameraCSSMatrix );
+				
 			}
 
 			var element = object.element;
@@ -256,6 +249,79 @@ var CSS3DRenderer = function () {
 		for ( var i = 0, l = object.children.length; i < l; i ++ ) {
 
 			renderObject( object.children[ i ], scene, camera, cameraCSSMatrix);
+
+		}
+
+	}
+
+	function renderObjectAR( object, scene, camera, cameraCSSMatrix) {
+
+		if ( object instanceof CSS3DObject ) {
+
+			object.onBeforeRender( _this, scene, camera );
+
+			var style;
+
+			let k = new THREE.Vector3().distanceTo(camera.position) / 10;
+			var fov = ((2/k) + 0.1)/2;
+
+			if ( object instanceof CSS3DSprite ) {
+
+				// http://swiftcoder.wordpress.com/2008/11/25/constructing-a-billboard-matrix/
+
+				matrix.copy( camera.matrixWorldInverse );
+				matrix.transpose();
+				matrix.copyPosition( object.matrixWorld );
+				matrix.scale( object.scale );
+
+				matrix.elements[ 3 ] = 0;
+				matrix.elements[ 7 ] = 0;
+				matrix.elements[ 11 ] = 0;
+				matrix.elements[ 15 ] = 1;
+
+				style = getObjectCSSMatrix( matrix, cameraCSSMatrix);
+
+			} else {
+
+				style = 'scale(' + fov + ')' + getObjectCSSMatrix( object.matrixWorld, cameraCSSMatrix );
+				
+			}
+
+			var element = object.element;
+			var cachedObject = cache.objects.get( object );
+
+			if ( cachedObject === undefined || cachedObject.style !== style ) {
+
+				element.style.WebkitTransform = style;
+				element.style.transform = style;
+
+				var objectData = { style: style };
+
+				if ( isIE ) {
+
+					objectData.distanceToCameraSquared = getDistanceToSquared( camera, object );
+
+				}
+
+				cache.objects.set( object, objectData );
+
+			}
+
+			element.style.display = object.visible ? '' : 'none';
+
+			if ( element.parentNode !== cameraElement ) {
+
+				cameraElement.appendChild( element );
+
+			}
+
+			object.onAfterRender( _this, scene, camera );
+
+		}
+
+		for ( var i = 0, l = object.children.length; i < l; i ++ ) {
+
+			renderObjectAR( object.children[ i ], scene, camera, cameraCSSMatrix);
 
 		}
 
@@ -374,9 +440,8 @@ var CSS3DRenderer = function () {
 
 	};
 
-	this.renderXR = function ( scene, camera, pos) {
-
-		var fov = camera.projectionMatrix.elements[ 5 ] * _heightHalf;
+	this.renderAR = function ( scene, camera) {
+		
 
 		if ( cache.camera.fov !== fov ) {
 
@@ -400,25 +465,25 @@ var CSS3DRenderer = function () {
 		if ( camera.parent === null ) camera.updateMatrixWorld();
 
 		if ( camera.isOrthographicCamera ) {
-
 			var tx = - ( camera.right + camera.left ) / 2;
 			var ty = ( camera.top + camera.bottom ) / 2;
-
 		}
+			
+		let pos = new THREE.Vector3(0,0,0);
+		camera.updateMatrixWorld();
+		pos.project(camera);
 
-		var translation = getCameraTranslation( camera.matrixWorld );
-
-		var x_pos = translation.x + pos.x;
-		var y_pos = translation.y + pos.y;
-		var z_pos = -translation.z;
-		// console.log(pos)
+		pos.x = (pos.x * _widthHalf);
+		pos.y = - (pos.y * _heightHalf);
+	
+		var fov = (camera.projectionMatrix.elements[ 5 ] * _heightHalf)
 
 		var cameraCSSMatrix = camera.isOrthographicCamera ?
-			'scale(' + fov + ')' + 'translate(' + epsilon( tx ) + 'px,' + epsilon( ty ) + 'px)' + getCameraCSSMatrix( camera.matrixWorldInverse) :
-			'translateZ(' + fov + 'px)' + getCameraCSSMatrix( camera.matrixWorldInverse);
-
-			var style = cameraCSSMatrix +
-			'translate(' + pos.x + 'px,' + pos.y + 'px)';
+		'scale(' + fov + ')' + 'translate(' + epsilon( tx ) + 'px,' + epsilon( ty ) + 'px)' + getCameraCSSMatrix( camera.matrixWorldInverse ) :
+		'translate3d(' + (pos.x ) + 'px,' + (pos.y ) + 'px,' + 0 + 'px)' + getCameraCSSMatrix( camera.matrixWorldInverse );
+	
+		var style = cameraCSSMatrix +
+		'translate(' + _widthHalf + 'px,' + _heightHalf + 'px)';
 
 		if ( cache.camera.style !== style && ! isIE ) {
 
@@ -429,7 +494,7 @@ var CSS3DRenderer = function () {
 
 		}
 
-		renderObject( scene, scene, camera, cameraCSSMatrix);
+		renderObjectAR( scene, scene, camera, cameraCSSMatrix);
 
 		if ( isIE ) {
 
@@ -476,8 +541,6 @@ class UI {
 
         this.css3DRenderer.domElement.appendChild( cameraElement );
 
-     
-        
         console.log(this.renderer);
     }
 
@@ -485,33 +548,10 @@ class UI {
         this.css3DRenderer.render( this.css3DScene, this.camera );
     }
 
-    updateXR(){
+    updateAR(){
 
-        // var width = window.innerWidth, height = window.innerHeight;
-        // var widthHalf = width / 2, heightHalf = height / 2;
-        
-		let pos = new THREE.Vector3();
-		pos = pos.setFromMatrixPosition(this.scene.matrixWorld);
-		this.camera.updateMatrixWorld();
-		pos.project(this.camera);
+		this.css3DRenderer.renderAR( this.css3DScene, this.camera);                  
 		
-		let widthHalf = this.renderer.domElement.offsetWidth / 2;
-		let heightHalf = this.renderer.domElement.offsetHeight / 2;
-
-		pos.x = ( pos.x + 1) * widthHalf;
-		pos.y = - ( pos.y - 1) * heightHalf;
-		// pos.x = (pos.x * widthHalf) + widthHalf;
-		// pos.y = - (pos.y * heightHalf) + heightHalf;
-		pos.z = new THREE.Vector3().distanceTo(this.camera.position);
-		// console.log(pos)
-		// console.log(this.camera.quaternion);
-        this.css3DRenderer.renderXR( this.css3DScene, this.camera, pos);                  
-		// this.css3DRenderer.render( this.css3DScene, this.camera);  
-        // if(pos.x != NaN){
-        //     // this.css3DStyle.transformOrigin = pos.x + "px " + pos.y + "py";
-        //     this.css3DRenderer.domElement.children[0].style.translateX = pos.x + "px "; 
-        //     // pos.y + "py";
-        // }
     }
 
     
@@ -523,39 +563,44 @@ class UI {
             domObject = new CSS3DObject( el );
         }else if(type == "html-string"){
             var parser = new DOMParser();
-            var htmlDoc = parser.parseFromString(el, 'text/html');
-            domObject = new CSS3DObject( htmlDoc.body );
+			var htmlDoc = parser.parseFromString(el, 'text/html');
+
+			var parentDiv = document.createElement('div');
+			while (htmlDoc.body.childNodes.length > 0) {
+				parentDiv.appendChild(htmlDoc.body.childNodes[0]);
+			}
+			domObject = new CSS3DObject( parentDiv );
         }else if(type == "html-file"){
             try{
                 let text = await this.requestFile(el);
                 let parser = new DOMParser();
                 let htmlDoc = parser.parseFromString(text, 'text/html');
                 domObject = new CSS3DObject( htmlDoc.body );
-                console.log(domObject);
+               
             }catch(error){
                 console.log("Error fetching remote HTML: ", error);
             }
         }
 
-		// domObject.position.set(0,0,20);
-        // var material = new THREE.MeshPhongMaterial({
-        //     opacity: 1,
-        //     // opacity	: 0,
-        //     color	: new THREE.Color('black'),
-        //     blending: THREE.NoBlending,
-        //     side	: THREE.DoubleSide,
-        // });
-        // var geometry = new THREE.PlaneGeometry( 100, 100 );
-        // var mesh = new THREE.Mesh( geometry, material );
-        // mesh.position.copy( domObject.position );
-        // mesh.rotation.copy( domObject.rotation );
-        // mesh.castShadow = false;
-        // mesh.receiveShadow = true;
-
-        var geometry = new THREE.BoxGeometry();
-        var material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+		domObject.position.set(0,0,20);
+        var material = new THREE.MeshPhongMaterial({
+            opacity: 1,
+            // opacity	: 0,
+            color	: new THREE.Color('black'),
+            blending: THREE.NoBlending,
+            side	: THREE.DoubleSide,
+        });
+        var geometry = new THREE.PlaneGeometry( 100, 100 );
         var mesh = new THREE.Mesh( geometry, material );
-        // scene.add( cube );
+        mesh.position.copy( domObject.position );
+        mesh.rotation.copy( domObject.rotation );
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+
+        // var geometry = new THREE.BoxGeometry();
+        // var material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+        // var mesh = new THREE.Mesh( geometry, material );
+        // this.scene.add( mesh );
 
         return {
             domObject: domObject,
@@ -583,13 +628,13 @@ class UI {
     }
     
     add(obj){
-        obj.clippingMesh.position.copy(obj.position);
-        obj.clippingMesh.rotation.copy(obj.rotation);
-        obj.clippingMesh.scale.copy(obj.scale);
-
-        obj.domObject.position.copy(obj.position);
-        obj.domObject.rotation.copy(obj.rotation);
-        obj.domObject.scale.copy(obj.scale);
+        // obj.domObject.position.copy(obj.position);
+        // obj.domObject.rotation.copy(obj.rotation);
+		// obj.domObject.scale.copy(obj.scale);
+		
+		obj.clippingMesh.position.copy(obj.domObject.position);
+        obj.clippingMesh.rotation.copy(obj.domObject.rotation);
+        obj.clippingMesh.scale.copy(obj.domObject.scale);
 
         // this.scene.add(obj.clippingMesh);
         this.css3DScene.add(obj.domObject);
@@ -597,4 +642,4 @@ class UI {
 
 }
 
-export default { CSS3DObject, CSS3DSprite, CSS3DRenderer, UI };
+export default { UI };
