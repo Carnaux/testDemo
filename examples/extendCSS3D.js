@@ -4,7 +4,7 @@
  * @author yomotsu / https://yomotsu.net/
  */
 /**
- * Modified by @author Carnaux / 
+ * Modified by @author Carnaux / https://github.com/Carnaux
  */
 
 import {
@@ -12,7 +12,7 @@ import {
 	Object3D,
 	Vector3,
 	Camera
-} from "../node_modules/three/build/three.module.js";
+} from "../three/build/three.module.js";
 
 var CSS3DObject = function ( element ) {
 
